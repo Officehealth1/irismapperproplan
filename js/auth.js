@@ -67,18 +67,18 @@ function initAdminAccess() {
 // Get base path for determining correct URLs
 function getBasePath() {
     const path = window.location.pathname;
-    // Handles GitHub Pages like /RepoName/path/to/file.html -> /RepoName/
-    // Handles local served from subdir like /ProjectFolder/path/to/file.html -> /ProjectFolder/
-    // Handles local served from root like /path/to/file.html -> /
     const segments = path.split('/').filter(segment => segment.length > 0);
 
-    // Common repository/project names used in this project.
-    // Order matters if one is a substring of another, but not in this case.
-    const projectFolders = ['Irismapper', 'Irismapper-main', 'irismapperproplan'];
+    // Ensure these are the canonical (lowercase) names of the project/repo folders
+    const projectRepoNames = ['irismapper', 'irismapper-main', 'irismapperproplan'];
 
-    for (const folder of projectFolders) {
-        if (segments.length > 0 && segments[0] === folder) {
-            return `/${folder}/`;
+    if (segments.length > 0) {
+        const firstSegmentLower = segments[0].toLowerCase();
+        for (const repoName of projectRepoNames) {
+            // repoName is already lowercase from the list
+            if (firstSegmentLower === repoName) {
+                return `/${repoName}/`; // Return the canonical (lowercase) repo name path
+            }
         }
     }
     // If not in a recognized project subfolder (e.g. served from root, or a different structure)
