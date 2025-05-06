@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>IrisMapper - Admin Panel</title>
+    <link rel="stylesheet" href="css/auth.css">
+    <link rel="stylesheet" href="css/admin.css">
+    <!-- Firebase SDKs -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="/js/firebase-config.js"></script>
+</head>
+<body>
+    <div class="admin-header">
+        <h1>IrisMapper Admin Panel</h1>
+        <div class="admin-controls">
+            <span id="admin-email-display"></span>
+            <button id="logout-btn" class="btn-secondary">Logout</button>
+        </div>
+    </div>
+
+    <div class="admin-container">
+        <div class="admin-tabs">
+            <button class="tab-button active" data-tab="create-user">Create User</button>
+            <button class="tab-button" data-tab="manage-users">Manage Users</button>
+        </div>
+
+        <div class="tab-content" id="create-user">
+            <div class="panel-box">
+                <h2>Create New User</h2>
+                <div id="create-error" class="error-message"></div>
+                <div id="create-success" class="success-message"></div>
+                
+                <form id="create-user-form">
+                    <div class="form-group">
+                        <label for="new-name">Full Name</label>
+                        <input type="text" id="new-name" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="new-email">Email</label>
+                        <input type="email" id="new-email" required>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="new-password">Password</label>
+                        <input type="password" id="new-password" required minlength="8">
+                        <div class="password-controls">
+                            <small>Minimum 8 characters</small>
+                            <button type="button" id="generate-password" class="btn-text">Generate Password</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button type="submit" class="btn-primary">Create User</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <div class="tab-content hidden" id="manage-users">
+            <div class="panel-box">
+                <h2>Manage Users</h2>
+                
+                <div class="user-controls">
+                    <div class="search-box">
+                        <input type="text" id="user-search" placeholder="Search users...">
+                    </div>
+                    <div class="filter-controls">
+                        <label>
+                            <input type="checkbox" id="show-active" checked>
+                            Active
+                        </label>
+                        <label>
+                            <input type="checkbox" id="show-inactive" checked>
+                            Inactive
+                        </label>
+                    </div>
+                </div>
+                
+                <div class="users-table-container">
+                    <table id="users-table">
+                        <thead>
+                            <tr>
+                                <th data-sort="name">Name <span class="sort-icon">↕</span></th>
+                                <th data-sort="email">Email <span class="sort-icon">↕</span></th>
+                                <th data-sort="createdAt">Created <span class="sort-icon">↕</span></th>
+                                <th data-sort="status">Status <span class="sort-icon">↕</span></th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- User data will be loaded here by JavaScript -->
+                        </tbody>
+                    </table>
+                    <div id="no-users-message" class="hidden">No users found</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Confirmation Modal -->
+    <div id="confirm-modal" class="modal">
+        <div class="modal-content">
+            <h2>Confirm Action</h2>
+            <p id="confirm-message"></p>
+            <div class="modal-actions">
+                <button id="confirm-yes" class="btn-primary">Yes</button>
+                <button id="confirm-no" class="btn-secondary">No</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load scripts in the correct order -->
+    <script src="js/auth.js"></script>
+    <script src="js/admin.js"></script>
+</body>
+</html> 
