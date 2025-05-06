@@ -90,16 +90,27 @@ function checkAuth() {
     console.log("Checking authentication");
     
     const path = window.location.pathname;
-    const basePath = getBasePath();
+    const basePath = getBasePath(); // basePath is like '/' or '/repoName/' (lowercase, with trailing slash)
     
-    const isAdminPanel = path.includes('admin-panel.html');
-    const isProfilePage = path.includes('profile.html');
-    const isLoginPage = path.includes('login.html');
-    const isMainAppPage = (path.includes('index.html') || path.includes('Irismapper-main')) && 
-                          !isLoginPage && !isAdminPanel && !isProfilePage;
+    const pathLower = path.toLowerCase();
+    const basePathLower = basePath; // getBasePath() already returns lowercase or '/'
+
+    // Define paths for specific pages using the reliable basePath
+    const loginPagePath = basePathLower + 'login.html';
+    const adminPanelPath = basePathLower + 'admin-panel.html';
+    const profilePagePath = basePathLower + 'profile.html';
+    const indexPagePath = basePathLower + 'index.html';
+
+    const isLoginPage = pathLower === loginPagePath;
+    const isAdminPanel = pathLower === adminPanelPath;
+    const isProfilePage = pathLower === profilePagePath;
+
+    // Determine if it's the main application page (index.html at the basePath or the basePath itself)
+    let isEffectivelyIndexPage = (pathLower === basePathLower || pathLower === indexPagePath);
+    const isMainAppPage = isEffectivelyIndexPage && !isLoginPage && !isAdminPanel && !isProfilePage;
     
     firebase.auth().onAuthStateChanged((user) => {
-        console.log("checkAuth - onAuthStateChanged fired. User:", user ? user.email : 'null', "Path:", path);
+        console.log("checkAuth - onAuthStateChanged fired. User:", user ? user.email : 'null', "Path:", path, "isMainAppPage:", isMainAppPage, "isLoginPage:", isLoginPage, "isAdminPanel:", isAdminPanel, "isProfilePage:", isProfilePage);
         if (user) {
             // User is signed in
             if (isLoginPage) {
@@ -128,14 +139,14 @@ function checkAuth() {
 
         } else {
             // No user is signed in - protect pages
-            console.log("User not authenticated. Path:", path, "isProfilePage:", isProfilePage, "isLoginPage:", isLoginPage);
+            console.log("User not authenticated. Path:", path, "isMainAppPage:", isMainAppPage, "isProfilePage:", isProfilePage, "isLoginPage:", isLoginPage, "isAdminPanel:", isAdminPanel);
             if (isAdminPanel && !isLoginPage) {
                 console.log("Redirecting to login: not authenticated for admin panel");
                 window.location.href = basePath + 'login.html';
             } else if (isProfilePage && !isLoginPage) {
                 console.log("Redirecting to login: not authenticated for profile page");
                 window.location.href = basePath + 'login.html';
-            } else if (isMainAppPage && !isLoginPage) {
+            } else if (isMainAppPage && !isLoginPage) { // This is the key check for index.html
                 console.log("Redirecting to login: not authenticated for main app page");
                 window.location.href = basePath + 'login.html';
             }
