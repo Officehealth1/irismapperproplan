@@ -2,12 +2,12 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Auth.js loaded with Firebase");
     
-    // Listen for auth state changes
+    // Listen for auth state changes (primarily for logging, checkAuth handles redirection)
     firebase.auth().onAuthStateChanged((user) => {
         if (user) {
-            console.log("User is signed in:", user.email);
+            console.log("Global Auth State Change: User is signed in:", user.email);
         } else {
-            console.log("No user is signed in");
+            console.log("Global Auth State Change: No user is signed in");
         }
     });
     
@@ -16,30 +16,27 @@ document.addEventListener('DOMContentLoaded', function() {
         initAdminAccess();
     }
     
-    // Check auth state based on current page
-    checkAuth();
+    // Check auth state based on current page - THIS IS THE MAIN AUTH GATEKEEPER
+    checkAuth(); 
     
-    // Handle form submissions
+    // Handle form submissions for login/admin login
     const loginForm = document.getElementById('login-form');
     const adminLoginForm = document.getElementById('admin-login-form');
-    const logoutBtn = document.getElementById('logout-btn');
-    
     if (loginForm) {
         loginForm.addEventListener('submit', handleLogin);
     }
-    
     if (adminLoginForm) {
         adminLoginForm.addEventListener('submit', handleAdminLogin);
     }
     
+    // Handle logout button clicks (for buttons with id='logout-btn' like in profile/admin)
+    // The logout button on index.html is handled in addUserControlsToMainApp
+    const logoutBtn = document.getElementById('logout-btn');
     if (logoutBtn) {
         logoutBtn.addEventListener('click', handleLogout);
     }
     
-    // If on profile page, load user data
-    if (window.location.pathname.includes('profile.html')) {
-        loadUserProfile();
-    }
+    // DO NOT call loadUserProfile here directly. checkAuth will handle it.
 });
 
 // Initialize Admin Access
@@ -77,7 +74,7 @@ function getBasePath() {
 
     // Common repository/project names used in this project.
     // Order matters if one is a substring of another, but not in this case.
-    const projectFolders = ['Irismapper', 'Irismapper-main'];
+    const projectFolders = ['Irismapper', 'Irismapper-main', 'irismapperproplan'];
 
     for (const folder of projectFolders) {
         if (segments.length > 0 && segments[0] === folder) {
@@ -95,51 +92,50 @@ function checkAuth() {
     const path = window.location.pathname;
     const basePath = getBasePath();
     
-    console.log("Current path:", path);
-    console.log("Base path:", basePath);
-    
     const isAdminPanel = path.includes('admin-panel.html');
     const isProfilePage = path.includes('profile.html');
     const isLoginPage = path.includes('login.html');
-    // Main app pages are index.html or paths including Irismapper-main, EXCLUDING specific auth/profile/admin pages
     const isMainAppPage = (path.includes('index.html') || path.includes('Irismapper-main')) && 
                           !isLoginPage && !isAdminPanel && !isProfilePage;
     
     firebase.auth().onAuthStateChanged((user) => {
+        console.log("checkAuth - onAuthStateChanged fired. User:", user ? user.email : 'null', "Path:", path);
         if (user) {
             // User is signed in
             if (isLoginPage) {
-                console.log("User is authenticated, redirecting from login to app");
+                console.log("User is authenticated on login page, redirecting to app");
                 window.location.href = basePath + 'index.html';
-                return; // Prevent further execution for login page if redirecting
+                return;
             }
 
-            // Add user controls (like Profile button) if on a main app page
             if (isMainAppPage) {
                 addUserControlsToMainApp();
             }
 
-            // Specific check for admin panel access
             if (isAdminPanel) {
                 checkAdminStatus().then(isAdmin => {
-                    if (!isAdmin && !isLoginPage) { // Redirect if not admin AND not already on login page
-                        console.log("Redirecting to login: user is not an admin for admin panel");
+                    if (!isAdmin && !isLoginPage) {
+                        console.log("User not admin for admin panel, redirecting to login");
                         window.location.href = basePath + 'login.html';
                     }
                 });
             }
-            // No specific redirection needed from checkAuth for isProfilePage if user is logged in,
-            // as loadUserProfile will handle data loading. The DOMContentLoaded already calls loadUserProfile.
+
+            if (isProfilePage) {
+                console.log("User is authenticated on profile page, calling loadUserProfile.");
+                loadUserProfile(user); // Pass the user object to avoid another fetch of currentUser
+            }
 
         } else {
             // No user is signed in - protect pages
+            console.log("User not authenticated. Path:", path, "isProfilePage:", isProfilePage, "isLoginPage:", isLoginPage);
             if (isAdminPanel && !isLoginPage) {
                 console.log("Redirecting to login: not authenticated for admin panel");
                 window.location.href = basePath + 'login.html';
             } else if (isProfilePage && !isLoginPage) {
                 console.log("Redirecting to login: not authenticated for profile page");
                 window.location.href = basePath + 'login.html';
-            } else if (isMainAppPage && !isLoginPage) { // isMainAppPage is already exclusive
+            } else if (isMainAppPage && !isLoginPage) {
                 console.log("Redirecting to login: not authenticated for main app page");
                 window.location.href = basePath + 'login.html';
             }
@@ -322,48 +318,49 @@ async function handleLogout() {
     }
 }
 
-// Load User Profile
-async function loadUserProfile() {
-    console.log("Loading user profile");
+// Load User Profile - Modified to accept user object
+async function loadUserProfile(authenticatedUser) {
+    console.log("Loading user profile for:", authenticatedUser ? authenticatedUser.email : 'Unknown user');
     
     const nameEl = document.getElementById('profile-name');
     const emailEl = document.getElementById('profile-email');
     const createdEl = document.getElementById('profile-created');
 
-    try {
-        const user = firebase.auth().currentUser;
+    // Fallback if authenticatedUser is somehow null, though checkAuth should prevent this call
+    if (!authenticatedUser) {
+        console.error("loadUserProfile called without an authenticated user. This shouldn't happen.");
         const basePath = getBasePath();
         const isLoginPage = window.location.pathname.includes('login.html');
-
-        if (!user) {
-            if (!isLoginPage) {
-                console.log("User not authenticated in loadUserProfile, redirecting to login.");
-                window.location.href = basePath + 'login.html';
-            }
-            return;
+        if (!isLoginPage) {
+             window.location.href = basePath + 'login.html';
         }
-        
-        const userDoc = await db.collection('users').doc(user.uid).get();
+        return;
+    }
+
+    try {
+        // We already have the user object from onAuthStateChanged, use its uid
+        const userDoc = await db.collection('users').doc(authenticatedUser.uid).get();
         
         if (!userDoc.exists) {
-            console.error("User document not found for UID:", user.uid);
+            console.error("User document not found for UID:", authenticatedUser.uid);
             if (nameEl) nameEl.textContent = 'User data not found.';
-            if (emailEl) emailEl.textContent = 'N/A';
+            if (emailEl) emailEl.textContent = authenticatedUser.email || 'N/A (email from auth)'; // Show email from auth as fallback
             if (createdEl) createdEl.textContent = 'N/A';
+            setupAppLink(); // Still setup app link
             return;
         }
         
         const userData = userDoc.data();
         
-        if (nameEl) nameEl.textContent = userData.name || user.displayName || 'No name provided';
-        if (emailEl) emailEl.textContent = userData.email || user.email;
+        if (nameEl) nameEl.textContent = userData.name || authenticatedUser.displayName || 'No name provided';
+        if (emailEl) emailEl.textContent = userData.email || authenticatedUser.email; // Prefer Firestore email, fallback to auth email
         
         if (createdEl) {
             if (userData.createdAt && typeof userData.createdAt.toDate === 'function') {
                 const createdDate = userData.createdAt.toDate();
                 createdEl.textContent = createdDate.toLocaleDateString();
             } else {
-                console.warn("User 'createdAt' field is missing or not a Firebase Timestamp for UID:", user.uid);
+                console.warn("User 'createdAt' field is missing or not a Firebase Timestamp for UID:", authenticatedUser.uid);
                 createdEl.textContent = 'Not available';
             }
         }
@@ -372,8 +369,9 @@ async function loadUserProfile() {
     } catch (error) {
         console.error("Error loading profile:", error);
         if (nameEl) nameEl.textContent = 'Error loading profile data.';
-        if (emailEl) emailEl.textContent = 'Error';
+        if (emailEl) emailEl.textContent = authenticatedUser.email || 'Error'; // Fallback email
         if (createdEl) createdEl.textContent = 'Error';
+        setupAppLink(); // Still setup app link
     }
 }
 
