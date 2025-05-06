@@ -2,12 +2,6 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Auth.js loaded with Firebase");
     
-    // Check if Firebase is initialized
-    if (!firebase || !firebase.app) {
-        console.error("Firebase not initialized. Make sure firebase-config.js is loaded before auth.js");
-        return;
-    }
-    
     // Listen for auth state changes
     firebase.auth().onAuthStateChanged((user) => {
         if (user) {
@@ -98,44 +92,57 @@ function getBasePath() {
 function checkAuth() {
     console.log("Checking authentication");
     
-    // Get the current path to determine what page we're on
     const path = window.location.pathname;
     const basePath = getBasePath();
     
     console.log("Current path:", path);
     console.log("Base path:", basePath);
     
-    // Check if we're on admin panel
     const isAdminPanel = path.includes('admin-panel.html');
-    
-    // Check if we're on an auth page (login)
+    const isProfilePage = path.includes('profile.html');
     const isLoginPage = path.includes('login.html');
+    // Main app pages are index.html or paths including Irismapper-main, EXCLUDING specific auth/profile/admin pages
+    const isMainAppPage = (path.includes('index.html') || path.includes('Irismapper-main')) && 
+                          !isLoginPage && !isAdminPanel && !isProfilePage;
     
-    // Check if we're in the main application directory
-    const isInMainApp = path.includes('Irismapper-main') || path.includes('index.html');
-    
-    // Wait for Firebase Auth to initialize
     firebase.auth().onAuthStateChanged((user) => {
-        // Admin panel protection
-        if (isAdminPanel) {
-            checkAdminStatus().then(isAdmin => {
-                if (!isAdmin) {
-                    console.log("Redirecting to login: not authenticated for admin panel");
-                    window.location.href = basePath + 'login.html';
-                }
-            });
-        }
-        
-        // Main app protection
-        if (isInMainApp && !user) {
-            console.log("Redirecting to login: not authenticated for main app");
-            window.location.href = basePath + 'login.html';
-        }
-        
-        // Add user controls to main app if logged in
-        if (isInMainApp && user) {
-            console.log("Adding user controls to main app");
-            addUserControlsToMainApp();
+        if (user) {
+            // User is signed in
+            if (isLoginPage) {
+                console.log("User is authenticated, redirecting from login to app");
+                window.location.href = basePath + 'index.html';
+                return; // Prevent further execution for login page if redirecting
+            }
+
+            // Add user controls (like Profile button) if on a main app page
+            if (isMainAppPage) {
+                addUserControlsToMainApp();
+            }
+
+            // Specific check for admin panel access
+            if (isAdminPanel) {
+                checkAdminStatus().then(isAdmin => {
+                    if (!isAdmin && !isLoginPage) { // Redirect if not admin AND not already on login page
+                        console.log("Redirecting to login: user is not an admin for admin panel");
+                        window.location.href = basePath + 'login.html';
+                    }
+                });
+            }
+            // No specific redirection needed from checkAuth for isProfilePage if user is logged in,
+            // as loadUserProfile will handle data loading. The DOMContentLoaded already calls loadUserProfile.
+
+        } else {
+            // No user is signed in - protect pages
+            if (isAdminPanel && !isLoginPage) {
+                console.log("Redirecting to login: not authenticated for admin panel");
+                window.location.href = basePath + 'login.html';
+            } else if (isProfilePage && !isLoginPage) {
+                console.log("Redirecting to login: not authenticated for profile page");
+                window.location.href = basePath + 'login.html';
+            } else if (isMainAppPage && !isLoginPage) { // isMainAppPage is already exclusive
+                console.log("Redirecting to login: not authenticated for main app page");
+                window.location.href = basePath + 'login.html';
+            }
         }
     });
 }
@@ -319,40 +326,54 @@ async function handleLogout() {
 async function loadUserProfile() {
     console.log("Loading user profile");
     
+    const nameEl = document.getElementById('profile-name');
+    const emailEl = document.getElementById('profile-email');
+    const createdEl = document.getElementById('profile-created');
+
     try {
         const user = firebase.auth().currentUser;
-        
+        const basePath = getBasePath();
+        const isLoginPage = window.location.pathname.includes('login.html');
+
         if (!user) {
-            window.location.href = 'login.html';
+            if (!isLoginPage) {
+                console.log("User not authenticated in loadUserProfile, redirecting to login.");
+                window.location.href = basePath + 'login.html';
+            }
             return;
         }
         
-        // Get user data from Firestore
         const userDoc = await db.collection('users').doc(user.uid).get();
         
         if (!userDoc.exists) {
-            console.error("User document not found");
+            console.error("User document not found for UID:", user.uid);
+            if (nameEl) nameEl.textContent = 'User data not found.';
+            if (emailEl) emailEl.textContent = 'N/A';
+            if (createdEl) createdEl.textContent = 'N/A';
             return;
         }
         
         const userData = userDoc.data();
         
-        // Display user info
-        document.getElementById('profile-name').textContent = userData.name || user.displayName || 'No name provided';
-        document.getElementById('profile-email').textContent = userData.email || user.email;
+        if (nameEl) nameEl.textContent = userData.name || user.displayName || 'No name provided';
+        if (emailEl) emailEl.textContent = userData.email || user.email;
         
-        // Format date nicely if available
-        if (userData.createdAt) {
-            const createdDate = userData.createdAt.toDate(); // Convert Firestore timestamp
-            document.getElementById('profile-created').textContent = createdDate.toLocaleDateString();
-        } else {
-            document.getElementById('profile-created').textContent = 'Not available';
+        if (createdEl) {
+            if (userData.createdAt && typeof userData.createdAt.toDate === 'function') {
+                const createdDate = userData.createdAt.toDate();
+                createdEl.textContent = createdDate.toLocaleDateString();
+            } else {
+                console.warn("User 'createdAt' field is missing or not a Firebase Timestamp for UID:", user.uid);
+                createdEl.textContent = 'Not available';
+            }
         }
         
-        // Set up app link with correct path
         setupAppLink();
     } catch (error) {
         console.error("Error loading profile:", error);
+        if (nameEl) nameEl.textContent = 'Error loading profile data.';
+        if (emailEl) emailEl.textContent = 'Error';
+        if (createdEl) createdEl.textContent = 'Error';
     }
 }
 
@@ -361,19 +382,11 @@ function setupAppLink() {
     const appLink = document.getElementById('app-link');
     if (!appLink) return;
     
-    // Determine path based on current location
-    const currentPath = window.location.pathname;
-    let appPath;
-    
-    if (currentPath.includes('/Irismapper/')) {
-        // GitHub Pages with /Irismapper/ prefix
-        appPath = '/Irismapper/Irismapper-main/index.html';
-    } else {
-        // Local development or root path
-        appPath = 'Irismapper-main/index.html';
-    }
+    const basePath = getBasePath();
+    const appPath = basePath + 'index.html'; // Link back to the main index page
     
     appLink.href = appPath;
+    console.log("App link on profile page set to:", appPath);
 }
 
 // Check if current user is admin
