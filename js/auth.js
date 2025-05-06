@@ -2,6 +2,12 @@
 document.addEventListener('DOMContentLoaded', function() {
     console.log("Auth.js loaded with Firebase");
     
+    // Check if Firebase is initialized
+    if (!firebase || !firebase.app) {
+        console.error("Firebase not initialized. Make sure firebase-config.js is loaded before auth.js");
+        return;
+    }
+    
     // Listen for auth state changes
     firebase.auth().onAuthStateChanged((user) => {
         if (user) {
