@@ -8,17 +8,48 @@
     <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/2.4.3/purify.min.js"></script>
 
-    <!-- Firebase SDKs -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-firestore.js"></script>
-    <!-- Firebase Config & Initialization -->
+    <!-- Firebase SDKs & Auth -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="js/firebase-config.js"></script>
+    <script src="js/auth.js"></script>
 
     <link rel="stylesheet" href="style.css">
-    <script src="js/auth.js"></script>
 </head>
 <body>
+<script>
+document.body.style.display = 'none';
+if (typeof firebase !== 'undefined' && firebase.auth) {
+    firebase.auth().onAuthStateChanged((user) => {
+        if (user) {
+            // User is signed in, show the body
+            document.body.style.display = 'block';
+        } else {
+            // No user is signed in, redirect to login page (corrected path)
+            // auth.js also handles this, but this provides an earlier redirect if auth.js hasn't fully run its checks
+            const basePath = (typeof getBasePath === 'function') ? getBasePath() : '/'; // Attempt to use getBasePath if available
+            let loginRedirectPath = 'login.html'; // Default relative path
+            if (basePath !== '/' && basePath.endsWith('/')) {
+                loginRedirectPath = basePath + 'login.html';
+            } else if (basePath === '/' && window.location.pathname.toLowerCase().includes('/irismapperproplan/')) {
+                // Fallback for specific repo context if getBasePath isn't ready or working as expected here
+                loginRedirectPath = '/irismapperproplan/login.html';
+            }
+            window.location.href = loginRedirectPath;
+        }
+    });
+} else {
+    // Fallback if Firebase isn't loaded yet - auth.js should handle the main redirection
+    // We can't reliably redirect here without Firebase, but auth.js will.
+    // Consider if we should attempt a simple redirect to login.html or let auth.js handle it.
+    // For now, let auth.js (loaded in head) manage the redirect if Firebase isn't ready here.
+    console.warn("Firebase not available for inline body script; auth.js will handle auth checks.");
+    // To be extremely safe and prevent FOUC if auth.js is slow, one might redirect here, but it's risky without base path context.
+    // Example: window.location.href = 'login.html'; // This would be a simple relative redirect.
+}
+</script>
+
     <div class="app-container">
         <img src="grids/watermark.png" alt="Logo" class="logo">
 

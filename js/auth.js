@@ -85,32 +85,64 @@ function getBasePath() {
     return '/';
 }
 
-// Check Authentication Status
+// Replace your existing checkAuth() function with this improved version
 function checkAuth() {
     console.log("Checking authentication");
     
     const path = window.location.pathname;
-    const basePath = getBasePath(); // basePath is like '/' or '/repoName/' (lowercase, with trailing slash)
+    const basePath = getBasePath();
     
     const pathLower = path.toLowerCase();
-    const basePathLower = basePath; // getBasePath() already returns lowercase or '/'
+    const basePathLower = basePath;
 
-    // Define paths for specific pages using the reliable basePath
+    // Define paths for specific pages
     const loginPagePath = basePathLower + 'login.html';
     const adminPanelPath = basePathLower + 'admin-panel.html';
     const profilePagePath = basePathLower + 'profile.html';
     const indexPagePath = basePathLower + 'index.html';
 
-    const isLoginPage = pathLower === loginPagePath;
-    const isAdminPanel = pathLower === adminPanelPath;
-    const isProfilePage = pathLower === profilePagePath;
+    const isLoginPage = pathLower.includes('login.html');
+    const isAdminPanel = pathLower.includes('admin-panel.html');
+    const isProfilePage = pathLower.includes('profile.html');
 
-    // Determine if it's the main application page (index.html at the basePath or the basePath itself)
-    let isEffectivelyIndexPage = (pathLower === basePathLower || pathLower === indexPagePath);
-    const isMainAppPage = isEffectivelyIndexPage && !isLoginPage && !isAdminPanel && !isProfilePage;
+    // Check if we're at index.html, the root path, or any non-login page
+    const isIndexPage = pathLower.includes('index.html');
+    const isRootPath = (pathLower === basePathLower || pathLower === '/');
+    const isMainAppPage = isIndexPage || isRootPath || (!isLoginPage && !isAdminPanel && !isProfilePage);
     
+    console.log("Path info:", {
+        path: pathLower,
+        basePath: basePathLower,
+        isLoginPage,
+        isAdminPanel,
+        isProfilePage,
+        isIndexPage,
+        isRootPath,
+        isMainAppPage
+    });
+
+    // IMPORTANT: For direct access to index.html, this check is crucial
+    // If not on login page and Firebase isn't loaded yet, we need to check repeatedly
+    if (isMainAppPage && !isLoginPage && (typeof firebase === 'undefined' || !firebase.auth)) {
+        console.log("Firebase not loaded yet, checking again in 100ms");
+        setTimeout(checkAuth, 100);
+        return;
+    }
+    
+    // IMMEDIATE PROTECTION: Before waiting for Firebase authentication state
+    // If this is a protected page and we can't confirm authentication, redirect to login right away
+    const quickAuthCheck = firebase && firebase.auth && firebase.auth().currentUser;
+    
+    if (isMainAppPage && !isLoginPage && !quickAuthCheck) {
+        console.log("Quick auth check failed, likely unauthorized access - redirecting to login");
+        window.location.href = basePath + 'login.html';
+        return;
+    }
+    
+    // Main authentication check
     firebase.auth().onAuthStateChanged((user) => {
-        console.log("checkAuth - onAuthStateChanged fired. User:", user ? user.email : 'null', "Path:", path, "isMainAppPage:", isMainAppPage, "isLoginPage:", isLoginPage, "isAdminPanel:", isAdminPanel, "isProfilePage:", isProfilePage);
+        console.log("checkAuth - onAuthStateChanged fired. User:", user ? user.email : 'null', "Path:", path);
+        
         if (user) {
             // User is signed in
             if (isLoginPage) {
@@ -134,20 +166,14 @@ function checkAuth() {
 
             if (isProfilePage) {
                 console.log("User is authenticated on profile page, calling loadUserProfile.");
-                loadUserProfile(user); // Pass the user object to avoid another fetch of currentUser
+                loadUserProfile(user);
             }
-
         } else {
             // No user is signed in - protect pages
-            console.log("User not authenticated. Path:", path, "isMainAppPage:", isMainAppPage, "isProfilePage:", isProfilePage, "isLoginPage:", isLoginPage, "isAdminPanel:", isAdminPanel);
-            if (isAdminPanel && !isLoginPage) {
-                console.log("Redirecting to login: not authenticated for admin panel");
-                window.location.href = basePath + 'login.html';
-            } else if (isProfilePage && !isLoginPage) {
-                console.log("Redirecting to login: not authenticated for profile page");
-                window.location.href = basePath + 'login.html';
-            } else if (isMainAppPage && !isLoginPage) { // This is the key check for index.html
-                console.log("Redirecting to login: not authenticated for main app page");
+            console.log("User not authenticated. Path:", path);
+            
+            if ((isAdminPanel || isProfilePage || isMainAppPage) && !isLoginPage) {
+                console.log("Unauthorized access, redirecting to login");
                 window.location.href = basePath + 'login.html';
             }
         }
